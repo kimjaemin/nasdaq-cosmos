@@ -56,7 +56,7 @@
 <body>
 <canvas id="c"></canvas>
 <div class="hud"><span class="title">NASDAQ Cosmos</span><span class="status"><span class="dot" id="dot"></span><span id="stat">—</span></span></div>
-<div class="foot">한 줄기 혜성 = 한 번의 체결 · 별 = 종목</div>
+<div class="foot">한 줄기 혜성 = 한 번의 체결 · 별 = 종목 · v3<div id="diag" style="margin-top:4px;color:#f5c46b"></div></div>
 <button class="gear" id="gear" aria-label="설정">⚙︎</button>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn"></button></div>
 
@@ -272,7 +272,7 @@
     stopDemo(); wantLive = true; mode = 'live'; err.textContent = '';
     if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
     setStatus('wait', '연결 중');
-    let opened = false;
+    let opened = false, msgCount = 0;
     ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(key));
     ws.onopen = () => {
       opened = true; retry = 0;
@@ -282,11 +282,14 @@
       lastTradeAt = performance.now(); toastShown = false;
     };
     ws.onmessage = ev => {
+      msgCount++; if (msgCount === 1) $('diag').textContent = '';
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (m.type === 'trade') for (const t of m.data || []) onTrade(t.s, +t.p, +t.v);
-      else if (m.type === 'error') { err.textContent = m.msg || '오류'; }
+      else if (m.type === 'error') { err.textContent = m.msg || '오류'; $('diag').textContent = '서버 메시지: ' + (m.msg || '오류'); }
     };
-    ws.onclose = () => {
+    ws.onerror = () => { $('diag').textContent = '연결 오류 (네트워크 또는 서버 거절)'; };
+    ws.onclose = (ev) => {
+      $('diag').textContent = '연결 닫힘 · 코드 ' + ev.code + (ev.reason ? ' · ' + ev.reason : '') + (msgCount ? '' : ' · 받은 데이터 없음');
       if (!opened) {
         if (key !== DEFAULT_KEY) { try { localStorage.removeItem('fh_key'); } catch (e) {} }
         setStatus('', '연결 실패'); err.textContent = '연결하지 못했습니다. 잠시 후 다시 시도하거나 데모로 보세요.';
