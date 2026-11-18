@@ -72,7 +72,7 @@
       <button class="btn" id="demoBtn">데모로 보기</button>
       <button class="btn primary" id="goBtn">실시간 연결</button>
     </div>
-    <p style="font-size:12px;margin-top:14px">키는 이 기기의 브라우저에만 저장됩니다. 나스닥 정규장은 한국 시간 밤 11시 30분~새벽 6시(미국 서머타임 중에는 한 시간 빠름)이며, 그 외 시간에는 체결이 드뭅니다.</p>
+    <p style="font-size:12px;margin-top:14px">기본 키가 들어 있어 바로 연결됩니다. 다른 키를 쓰려면 바꿔 넣으세요. 나스닥 정규장은 한국 시간 밤 11시 30분~새벽 6시(미국 서머타임 중에는 한 시간 빠름)이며, 그 외 시간에는 체결이 드뭅니다.</p>
   </div>
 </div>
 
@@ -85,6 +85,7 @@
   const PORT = [[0.27,0.20],[0.72,0.33],[0.32,0.50],[0.70,0.66],[0.33,0.82]];
   const LINKS = [[0,1],[1,2],[2,3],[3,4],[1,4]];
   const G = 0.018, MAXC = 500, TAIL = 44;
+  const DEFAULT_KEY = 'dbutj69r01qrflsmp46gdbutj69r01qrflsmp470';
 
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
   const neb = document.createElement('canvas'), nctx = neb.getContext('2d');
@@ -262,6 +263,7 @@
   }
   function hideToast() { $('toast').style.display = 'none'; }
   let savedKey = ''; try { savedKey = localStorage.getItem('fh_key') || ''; } catch (e) {}
+  if (!savedKey) savedKey = DEFAULT_KEY;
   keyIn.value = savedKey;
 
   // ---------- live ----------
@@ -286,7 +288,8 @@
     };
     ws.onclose = () => {
       if (!opened) {
-        setStatus('', '연결 실패'); err.textContent = '연결하지 못했습니다. API 키를 확인해 주세요.';
+        if (key !== DEFAULT_KEY) { try { localStorage.removeItem('fh_key'); } catch (e) {} }
+        setStatus('', '연결 실패'); err.textContent = '연결하지 못했습니다. 잠시 후 다시 시도하거나 데모로 보세요.';
         panel.classList.remove('hidden'); wantLive = false; return;
       }
       if (!wantLive) return;
