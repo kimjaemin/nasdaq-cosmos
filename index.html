@@ -56,7 +56,7 @@
 <body>
 <canvas id="c"></canvas>
 <div class="hud"><span class="title">NASDAQ Cosmos</span><span class="status"><span class="dot" id="dot"></span><span id="stat">—</span></span></div>
-<div class="foot">한 줄기 혜성 = 한 번의 체결 · 별 = 종목 · v4<div id="diag" style="margin-top:4px;color:#f5c46b"></div></div>
+<div class="foot">한 줄기 혜성 = 한 번의 체결 · 별 = 종목 · v5<div id="diag" style="margin-top:4px;color:#f5c46b"></div></div>
 <button class="gear" id="gear" aria-label="설정">⚙︎</button>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn"></button></div>
 
@@ -120,11 +120,12 @@
 
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
+    W = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    H = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
     cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
     ctx.setTransform(DPR,0,0,DPR,0,0);
     portrait = H > W;
-    U = Math.min(W, H) / 1.125;              // pixels per world unit
+    U = Math.max(1, Math.min(W, H)) / 1.125;  // pixels per world unit
     home = (portrait ? PORT : LAND).map(([fx,fy]) => [fx*W/U, fy*H/U]);
     const n = Math.round(Math.min(700, W*H/1800));
     stars = Array.from({length: n}, () => ({
@@ -133,6 +134,8 @@
     buildNebula();
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
   resize();
 
   // ---------- state ----------
@@ -173,6 +176,11 @@
   // ---------- render ----------
   let tPrev = performance.now();
   function frame(now) {
+    try { if ((window.innerWidth|0) !== (W|0) || (window.innerHeight|0) !== (H|0)) resize(); draw(now); }
+    catch (e) { console.error(e); }
+    requestAnimationFrame(frame);
+  }
+  function draw(now) {
     const dt = Math.min(0.05, (now - tPrev) / 1000); tPrev = now;
     const T = now / 1000;
     // physics
@@ -246,7 +254,6 @@
       const quiet = (now - lastTradeAt) / 1000;
       if (lastTradeAt && quiet > 90) showToast('90초째 체결이 없습니다. 장이 닫혀 있을 수 있어요.', '데모 보기', startDemo);
     }
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
