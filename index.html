@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#03050f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NASDAQ Cosmos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --fg: rgba(220,226,255,.86); --dim: rgba(200,208,240,.5); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #03050f; overflow: hidden; color: var(--fg);
+    font-family: 'Jost', 'Futura', 'Helvetica Neue', sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: manipulation; }
+  .hud { position: fixed; left: 0; right: 0; pointer-events: none; display: flex; justify-content: space-between; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 18px) 0 calc(env(safe-area-inset-left) + 18px);
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase; top: 0; }
+  .hud .title { font-weight: 500; }
+  .hud .status { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #666; box-shadow: 0 0 8px currentColor; }
+  .dot.live { background: #6cf3a0; color: #6cf3a0; animation: pulse 1.6s infinite; }
+  .dot.demo { background: #c9a6ff; color: #c9a6ff; }
+  .dot.wait { background: #f5c46b; color: #f5c46b; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .foot { position: fixed; left: 0; right: 0; bottom: 0; pointer-events: none; text-align: center; color: var(--dim);
+    font-size: 11px; letter-spacing: .08em; padding: 0 16px calc(env(safe-area-inset-bottom) + 12px); }
+  .gear { position: fixed; right: calc(env(safe-area-inset-right) + 10px); bottom: calc(env(safe-area-inset-bottom) + 8px);
+    pointer-events: auto; background: none; border: 0; color: var(--dim); font-size: 18px; padding: 8px; cursor: pointer; }
+  .panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(2,3,10,.72);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 5; padding: 24px; }
+  .panel.hidden { display: none; }
+  .card { width: min(420px, 100%); background: rgba(14,16,34,.92); border: 1px solid rgba(160,170,255,.18); border-radius: 14px;
+    padding: 24px 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .card h1 { margin: 0 0 4px; font-weight: 400; font-size: 22px; letter-spacing: .06em; }
+  .card p { margin: 8px 0; font-size: 13.5px; line-height: 1.6; color: rgba(210,216,245,.75); }
+  .card label { display: block; font-size: 12px; letter-spacing: .1em; color: var(--dim); margin: 16px 0 6px; }
+  .card input { width: 100%; padding: 12px 12px; border-radius: 8px; border: 1px solid rgba(160,170,255,.25); background: #070a1a;
+    color: #e8ecff; font: 15px/1.2 ui-monospace, Menlo, monospace; }
+  .row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(160,170,255,.3); background: transparent; color: #e8ecff;
+    font: 500 14px 'Jost', sans-serif; letter-spacing: .06em; cursor: pointer; }
+  .btn.primary { background: #3d4cc9; border-color: #3d4cc9; }
+  .err { color: #ff9a8a; font-size: 12.5px; min-height: 18px; margin-top: 8px; }
+  .legend { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 14px; font-size: 11px; text-align: center; }
+  .legend span::before { content: ''; display: block; width: 9px; height: 9px; border-radius: 50%; margin: 0 auto 4px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 44px); transform: translateX(-50%); z-index: 4;
+    background: rgba(14,16,34,.9); border: 1px solid rgba(160,170,255,.2); border-radius: 999px; padding: 8px 14px; font-size: 12.5px;
+    color: var(--fg); pointer-events: auto; display: none; gap: 10px; align-items: center; white-space: nowrap; }
+  .toast button { background: none; border: 0; color: #a9b4ff; font: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><span class="title">NASDAQ Cosmos</span><span class="status"><span class="dot" id="dot"></span><span id="stat">—</span></span></div>
+<div class="foot">한 줄기 혜성 = 한 번의 체결 · 별 = 종목</div>
+<button class="gear" id="gear" aria-label="설정">⚙︎</button>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn"></button></div>
+
+<div class="panel" id="panel">
+  <div class="card">
+    <h1>NASDAQ Cosmos</h1>
+    <p>나스닥 다섯 종목을 다섯 개의 별로, 실시간 체결 하나하나를 그 별의 중력에 끌리는 혜성으로 그립니다.</p>
+    <div class="legend" id="legend"></div>
+    <label for="key">FINNHUB API KEY</label>
+    <input id="key" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="finnhub.io 대시보드의 API Key">
+    <div class="err" id="err"></div>
+    <div class="row">
+      <button class="btn" id="demoBtn">데모로 보기</button>
+      <button class="btn primary" id="goBtn">실시간 연결</button>
+    </div>
+    <p style="font-size:12px;margin-top:14px">키는 이 기기의 브라우저에만 저장됩니다. 나스닥 정규장은 한국 시간 밤 11시 30분~새벽 6시(미국 서머타임 중에는 한 시간 빠름)이며, 그 외 시간에는 체결이 드뭅니다.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const SYMS = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN'];
+  const COL = [[255,115,77],[115,179,255],[204,153,255],[217,230,242],[255,199,89]];
+  // home positions as fractions of the screen (landscape / portrait)
+  const LAND = [[0.155,0.40],[0.38,0.68],[0.52,0.26],[0.75,0.25],[0.89,0.66]];
+  const PORT = [[0.27,0.20],[0.72,0.33],[0.32,0.50],[0.70,0.66],[0.33,0.82]];
+  const LINKS = [[0,1],[1,2],[2,3],[3,4],[1,4]];
+  const G = 0.018, MAXC = 500, TAIL = 44;
+
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const neb = document.createElement('canvas'), nctx = neb.getContext('2d');
+  let W = 0, H = 0, DPR = 1, U = 1, portrait = false, home = [];
+  let stars = [];
+  const sprites = COL.map(c => makeSprite(c));
+  const white = makeSprite([255,255,255]);
+
+  function makeSprite(c) {
+    const s = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'), gr = g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},1)`);
+    gr.addColorStop(0.25, `rgba(${c[0]},${c[1]},${c[2]},.55)`);
+    gr.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
+    g.fillStyle = gr; g.fillRect(0,0,64,64); return s;
+  }
+
+  function buildNebula() {
+    neb.width = 480; neb.height = Math.round(480 * H / W) || 270;
+    const w = neb.width, h = neb.height;
+    nctx.fillStyle = '#03050f'; nctx.fillRect(0,0,w,h);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const tints = [[70,40,150],[35,50,140],[110,40,120],[30,70,120]];
+    for (let i = 0; i < 46; i++) {
+      const x = rnd()*w, y = rnd()*h, r = (0.12 + rnd()*0.38) * Math.max(w,h), t = tints[i % tints.length];
+      const g = nctx.createRadialGradient(x,y,0,x,y,r);
+      g.addColorStop(0, `rgba(${t[0]},${t[1]},${t[2]},${0.05 + rnd()*0.07})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      nctx.fillStyle = g; nctx.fillRect(0,0,w,h);
+    }
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    portrait = H > W;
+    U = Math.min(W, H) / 1.125;              // pixels per world unit
+    home = (portrait ? PORT : LAND).map(([fx,fy]) => [fx*W/U, fy*H/U]);
+    const n = Math.round(Math.min(700, W*H/1800));
+    stars = Array.from({length: n}, () => ({
+      x: Math.random()*W, y: Math.random()*H, s: Math.pow(Math.random(), 3)*1.9 + 0.35,
+      b: 0.25 + Math.random()*0.65, f: 0.5 + Math.random()*2.5, p: Math.random()*6.283, t: Math.random() }));
+    buildNebula();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- state ----------
+  const comets = [];
+  const act = [0,0,0,0,0], last = {}, base = {}, price = {};
+  let lastTradeAt = 0, mode = 'idle';
+
+  function spawn(i, v, bias) {
+    const n = 1 + Math.min(2, Math.floor(Math.log1p(Math.max(v,0)) / 3));
+    for (let k = 0; k < n; k++) {
+      if (comets.length >= MAXC) comets.shift();
+      const h = home[i]; let x, y, vx, vy;
+      if (Math.random() < 0.4) {
+        const a = Math.random()*6.283, r = 0.12 + Math.random()*0.18, dir = Math.random() < .5 ? -1 : 1;
+        x = h[0] + r*Math.cos(a); y = h[1] + r*Math.sin(a);
+        const sp = Math.sqrt(G/r) * (0.8 + Math.random()*0.45);
+        vx = -Math.sin(a)*sp*dir; vy = Math.cos(a)*sp*dir;
+      } else {
+        x = (0.03 + Math.random()*0.94) * W/U; y = (0.05 + Math.random()*0.9) * H/U;
+        const a = Math.random()*6.283, sp = 0.15 + Math.random()*0.35;
+        vx = Math.cos(a)*sp; vy = Math.sin(a)*sp;
+      }
+      vy -= 0.12 * bias;                       // screen y grows downward: up-ticks rise
+      const span = 2.5 + Math.random()*4;
+      comets.push({x, y, vx, vy, i, h: [], life: span, span, size: (0.016 + Math.random()*0.014) * (1 + Math.min(1.5, Math.log1p(Math.max(v,0))*0.15))});
+    }
+    act[i] = Math.min(1, act[i] + 0.15);
+  }
+
+  function onTrade(s, p, v) {
+    const i = SYMS.indexOf(s); if (i < 0 || !(p > 0)) return;
+    const prev = last[s] ?? p; const bias = p > prev ? 1 : p < prev ? -1 : 0;
+    last[s] = p; price[s] = p; if (!(s in base)) base[s] = p;
+    lastTradeAt = performance.now();
+    spawn(i, v, bias);
+  }
+
+  // ---------- render ----------
+  let tPrev = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - tPrev) / 1000); tPrev = now;
+    const T = now / 1000;
+    // physics
+    for (let k = comets.length - 1; k >= 0; k--) {
+      const c = comets[k], h = home[c.i];
+      const rx = h[0]-c.x, ry = h[1]-c.y, d = Math.hypot(rx, ry) + 1e-4, dd = Math.max(d, 0.05);
+      const f = G / (dd*dd*dd);
+      c.vx += rx*f*dt; c.vy += ry*f*dt; c.h.unshift(c.x, c.y); if (c.h.length > TAIL) c.h.length = TAIL; c.x += c.vx*dt; c.y += c.vy*dt; c.life -= dt;
+      if (c.life <= 0 || d < 0.03 || c.x < -0.2 || c.y < -0.2 || c.x > W/U+0.2 || c.y > H/U+0.2) comets.splice(k,1);
+    }
+    for (let i = 0; i < 5; i++) act[i] *= Math.pow(0.985, dt*60);
+
+    // background
+    ctx.globalCompositeOperation = 'source-over';
+    const dx = Math.sin(T*0.02)*W*0.03, dy = Math.cos(T*0.017)*H*0.03;
+    ctx.drawImage(neb, -W*0.05 + dx, -H*0.05 + dy, W*1.1, H*1.1);
+    ctx.globalCompositeOperation = 'lighter';
+    // twinkling stars
+    for (const s of stars) {
+      const a = s.b * (0.55 + 0.45*Math.sin(s.f*T + s.p));
+      ctx.fillStyle = `rgba(${215+40*s.t|0},${225},255,${a})`;
+      ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    // constellation lines
+    ctx.lineWidth = 1;
+    for (const [a,b] of LINKS) {
+      const ca = COL[a], cb = COL[b];
+      const g = ctx.createLinearGradient(home[a][0]*U, home[a][1]*U, home[b][0]*U, home[b][1]*U);
+      g.addColorStop(0, `rgba(${ca[0]},${ca[1]},${ca[2]},.16)`); g.addColorStop(1, `rgba(${cb[0]},${cb[1]},${cb[2]},.16)`);
+      ctx.strokeStyle = g; ctx.beginPath(); ctx.moveTo(home[a][0]*U, home[a][1]*U); ctx.lineTo(home[b][0]*U, home[b][1]*U); ctx.stroke();
+    }
+    // comets with tails drawn from their recent path
+    for (const c of comets) {
+      const fr = Math.max(0, Math.min(1, c.life / c.span)), env = Math.sqrt(Math.sin(Math.PI*fr));
+      const r0 = c.size * U * (0.45 + 0.55*env) * 0.42, h = c.h, n = h.length, spr = sprites[c.i];
+      for (let j = 0; j < n; j += 2) {
+        const k = j / TAIL, r = r0 * (1 - 0.75*k);
+        ctx.globalAlpha = (0.18 + 0.55*env) * (1 - k) * 0.7;
+        ctx.drawImage(spr, h[j]*U - r, h[j+1]*U - r, r*2, r*2);
+      }
+      ctx.globalAlpha = 0.25 + 0.75*env;
+      ctx.drawImage(spr, c.x*U - r0, c.y*U - r0, r0*2, r0*2);
+    }
+    ctx.globalAlpha = 1;
+    // stars of the five stocks
+    for (let i = 0; i < 5; i++) {
+      const [hx, hy] = home[i], a = act[i], br = 1 + 0.04*Math.sin(T*0.7 + i);
+      const halo = 0.32*U*(1 + 0.6*a)*br, body = 0.13*U*(1 + 0.35*a)*br, core = 0.045*U;
+      ctx.globalAlpha = 0.22 + 0.25*a; ctx.drawImage(sprites[i], hx*U-halo, hy*U-halo, halo*2, halo*2);
+      ctx.globalAlpha = 0.85; ctx.drawImage(sprites[i], hx*U-body, hy*U-body, body*2, body*2);
+      ctx.globalAlpha = 1; ctx.drawImage(white, hx*U-core, hy*U-core, core*2, core*2);
+    }
+    // labels
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(2,3,12,.9)'; ctx.shadowBlur = 6;
+    const fs = Math.max(11, Math.min(15, U*0.026));
+    for (let i = 0; i < 5; i++) {
+      const s = SYMS[i], c = COL[i], x = home[i][0]*U, y = home[i][1]*U + 0.095*U;
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},.92)`;
+      ctx.font = `500 ${fs}px Jost, Futura, sans-serif`; ctx.fillText(s, x, y);
+      if (price[s]) {
+        ctx.font = `400 ${fs*0.92}px Jost, Futura, sans-serif`;
+        ctx.fillText(price[s].toFixed(2), x, y + fs*1.25);
+        const pc = (price[s] - base[s]) / base[s] * 100;
+        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},.6)`;
+        ctx.fillText((pc >= 0 ? '+' : '') + pc.toFixed(3) + '%', x, y + fs*2.4);
+      }
+    }
+    ctx.shadowBlur = 0;
+    if (mode === 'live') {
+      const quiet = (now - lastTradeAt) / 1000;
+      if (lastTradeAt && quiet > 90) showToast('90초째 체결이 없습니다. 장이 닫혀 있을 수 있어요.', '데모 보기', startDemo);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const panel = $('panel'), keyIn = $('key'), err = $('err');
+  $('legend').innerHTML = SYMS.map((s,i) => `<span style="color:rgb(${COL[i]})">${s}</span>`).join('');
+  function setStatus(kind, text) { $('dot').className = 'dot ' + kind; $('stat').textContent = text; }
+  let toastShown = false;
+  function showToast(msg, btn, fn) {
+    if (toastShown) return; toastShown = true;
+    $('toastMsg').textContent = msg; $('toastBtn').textContent = btn; $('toastBtn').onclick = () => { hideToast(); fn(); };
+    $('toast').style.display = 'flex';
+  }
+  function hideToast() { $('toast').style.display = 'none'; }
+  let savedKey = ''; try { savedKey = localStorage.getItem('fh_key') || ''; } catch (e) {}
+  keyIn.value = savedKey;
+
+  // ---------- live ----------
+  let ws = null, retry = 0, wantLive = false, demoTimer = null;
+  function connect(key) {
+    stopDemo(); wantLive = true; mode = 'live'; err.textContent = '';
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
+    setStatus('wait', '연결 중');
+    let opened = false;
+    ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(key));
+    ws.onopen = () => {
+      opened = true; retry = 0;
+      SYMS.forEach(s => ws.send(JSON.stringify({type: 'subscribe', symbol: s})));
+      setStatus('live', 'LIVE'); panel.classList.add('hidden');
+      try { localStorage.setItem('fh_key', key); } catch (e) {}
+      lastTradeAt = performance.now(); toastShown = false;
+    };
+    ws.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.type === 'trade') for (const t of m.data || []) onTrade(t.s, +t.p, +t.v);
+      else if (m.type === 'error') { err.textContent = m.msg || '오류'; }
+    };
+    ws.onclose = () => {
+      if (!opened) {
+        setStatus('', '연결 실패'); err.textContent = '연결하지 못했습니다. API 키를 확인해 주세요.';
+        panel.classList.remove('hidden'); wantLive = false; return;
+      }
+      if (!wantLive) return;
+      setStatus('wait', '재연결 중');
+      setTimeout(() => wantLive && connect(key), Math.min(15000, 1000 * Math.pow(2, retry++)));
+    };
+  }
+
+  // ---------- demo ----------
+  const demoPrice = {AAPL: 353.5, NVDA: 152.9, TSLA: 384.8, MSFT: 504.9, AMZN: 266.4};
+  const demoRate = [1.6, 2.4, 0.9, 0.7, 1.9];   // trades per second
+  function startDemo() {
+    wantLive = false; if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
+    mode = 'demo'; panel.classList.add('hidden'); hideToast(); setStatus('demo', 'DEMO');
+    stopDemo();
+    demoTimer = setInterval(() => {
+      SYMS.forEach((s, i) => {
+        const burst = Math.random() < 0.04 ? 6 : 1;
+        if (Math.random() < demoRate[i] * 0.1 * burst) {
+          demoPrice[s] *= 1 + (Math.random() - 0.5) * 0.0008;
+          onTrade(s, +demoPrice[s].toFixed(2), Math.floor(Math.exp(Math.random()*6)));
+        }
+      });
+    }, 100);
+  }
+  function stopDemo() { if (demoTimer) clearInterval(demoTimer); demoTimer = null; }
+
+  $('goBtn').onclick = () => { const k = keyIn.value.trim(); if (!k) { err.textContent = 'API 키를 입력해 주세요.'; return; } connect(k); };
+  $('demoBtn').onclick = startDemo;
+  $('gear').onclick = () => { panel.classList.remove('hidden'); };
+  panel.addEventListener('click', e => { if (e.target === panel && mode !== 'idle') panel.classList.add('hidden'); });
+
+  // keep the screen awake while watching (where supported)
+  let lock = null;
+  async function wake() { try { if ('wakeLock' in navigator && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => lock = null); } } catch (e) {} }
+  document.addEventListener('click', wake);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
+
+  if (location.hash === '#demo') startDemo();
+  else if (savedKey) connect(savedKey);
+  else setStatus('', '대기');
+})();
+</script>
+</body>
+</html>
