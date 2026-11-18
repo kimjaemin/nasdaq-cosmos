@@ -1,0 +1,37 @@
+name: Deploy relay
+
+on:
+  push:
+    branches: [main]
+    paths: ['relay/**', '.github/workflows/deploy-relay.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        id: check
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          FH_KEY: ${{ secrets.FINNHUB_KEY }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ] || [ -z "$FH_KEY" ]; then
+            echo "::notice::Secrets not set yet (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, FINNHUB_KEY). Skipping deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy worker
+        if: steps.check.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: relay
+          secrets: |
+            FINNHUB_KEY
+        env:
+          FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
